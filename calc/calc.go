@@ -186,7 +186,8 @@ func main() {
 	var myCalc Calc
 	myCalc.Init("CALC")
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("Welcome to HSM Calculator! Perform integer arithmetic with +, -, *, /, =, o=on, f=off, c=clear, q=quit")
+	fmt.Println("Welcome to the HSM Calculator!")
+	fmt.Println("Perform integer arithmetic with +, -, *, /, =, o=on, f=off, c=clear, q=quit")
 	fmt.Println("Calculator OFF")
 
 	// Process input
