@@ -28,7 +28,7 @@ func (calc *Calc) ActionAppendOperand1(param interface{}) {
         calc.operand1 = calc.operand1*10 + intFromDigit(param)
 }
 ```
-Exit and entry actions can also be specified. All exit actions from the current state to the ancestor with a matching transition are called in ascending order followed by the transition action and any entry actions for the new state.  Entry actions for parents of the new state are not called. Our calculator defines an entry action for the *On* state that clears the calculator for both the *OnButton* and *Clear* events:
+Exit and entry actions can also be specified. All exit actions from the current state to the ancestor with a matching transition are called in ascending order followed by entry actions for the new state and the transition action.  Entry actions for parents of the new state are not called. Our calculator defines an entry action for the *On* state that clears the calculator for both the *OnButton* and *Clear* events:
 ```
 	on.AddEntryActions(calc.ActionClear)
 ```

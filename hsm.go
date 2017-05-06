@@ -87,10 +87,6 @@ func (hsm *HSMBase) Inject(event Event, param interface{}) error {
 
 // Apply transition to state machine
 func (hsm *HSMBase) applyTransition(tran *Transition, actions []ActionFunc, param interface{}) error {
-	// Add action for transition
-	if tran.Action != nil {
-		actions = append(actions, tran.Action)
-	}
 	// Add entry actions
 	newState, ok := hsm.states[tran.NewState]
 	if !ok {
@@ -105,6 +101,10 @@ func (hsm *HSMBase) applyTransition(tran *Transition, actions []ActionFunc, para
 			fmt.Sprintf("New state not found for %s from %s on %s with %+v", hsm.Name, hsm.CurrentState, tran.On, param))
 	}
 	actions = append(actions, newState.entryActions...)
+	// Add action for transition
+	if tran.Action != nil {
+		actions = append(actions, tran.Action)
+	}
 	// Run Actions
 	for _, action := range actions {
 		hsm.instance.Log().WithFields(logrus.Fields{
