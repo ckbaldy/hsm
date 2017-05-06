@@ -1,6 +1,6 @@
 # [HSM](https://github.com/watercraft/hsm)
 HSM is a [Go](http://www.golang.org) library for creating [Hierachical State Machines](https://en.wikipedia.org/wiki/UML_state_machine). Included in this package is an interactive calculator that follows this diagram:
-![Calculator HSM](Calculator.png "Calculator Hierachical State Machine")
+![Calculator HSM](CalculatorHSM.png "Calculator Hierachical State Machine")
 ## Building
 ```
 go install ...
