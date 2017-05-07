@@ -24,11 +24,12 @@ func (calc *Calc) LogTransition(tran *hsm.Transition, param interface{}) {
 ```
 The *Init()* function constructs the state machine adding states, transitions, and actions see [calc.go](calc/calc.go).  *Log()* returns the logrus.Logger for HSM to use and *LogTransition()* is called for each state transition. Actions are also member functions of the HSM instance. For example, this action adds a decimal digit to the member *operand1*:
 ```
-func (calc *Calc) ActionAppendOperand1(param interface{}) {
+func (calc *Calc) ActionAppendOperand1(param interface{}) error {
         calc.operand1 = calc.operand1*10 + intFromDigit(param)
+	return nil
 }
 ```
-Exit and entry actions can also be specified. All exit actions from the current state to the ancestor with a matching transition are called in ascending order followed by entry actions for the new state and the transition action.  Entry actions for parents of the new state are not called. Our calculator defines an entry action for the *On* state that clears the calculator for both the *OnButton* and *Clear* events:
+Exit and entry actions can also be specified. All exit actions from the current state to the ancestor with a matching transition are called in ascending order followed by entry actions for the new state and the transition action.  Entry actions for parents of the new state are not called. Any failure returned from an action will abort the transition.  Our calculator defines an entry action for the *On* state that clears the calculator for both the *OnButton* and *Clear* events:
 ```
 	on.AddEntryActions(calc.ActionClear)
 ```

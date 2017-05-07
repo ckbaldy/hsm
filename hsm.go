@@ -107,6 +107,7 @@ func (hsm *HSMBase) applyTransition(tran *Transition, actions []ActionFunc, para
 	}
 	// Run Actions
 	for _, action := range actions {
+		err := action(param)
 		hsm.instance.Log().WithFields(logrus.Fields{
 			"hsm":   hsm.Name,
 			"state": hsm.CurrentState,
@@ -114,8 +115,11 @@ func (hsm *HSMBase) applyTransition(tran *Transition, actions []ActionFunc, para
 			"new":   tran.NewState,
 			"func":  runtime.FuncForPC(reflect.ValueOf(action).Pointer()).Name(),
 			"param": param,
-		}).Debug("Run action")
-		action(param)
+			"err":   err,
+		}).Debug("Action done")
+		if err != nil {
+			return err
+		}
 	}
 	// Log transition
 	hsm.instance.LogTransition(tran, param)

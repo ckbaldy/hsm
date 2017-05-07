@@ -2,7 +2,7 @@ package hsm
 
 type State string
 
-type ActionFunc func(param interface{})
+type ActionFunc func(param interface{}) error
 
 type Transition struct {
 	On       Event

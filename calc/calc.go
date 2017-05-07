@@ -108,37 +108,44 @@ func intFromDigit(param interface{}) int {
 	return int(param.(byte)) - int('0')
 }
 
-func (calc *Calc) ActionClear(param interface{}) {
+func (calc *Calc) ActionClear(param interface{}) error {
 	calc.operand1 = 0
 	calc.operand2 = 0
 	calc.operator = ' '
+	return nil
 }
 
-func (calc *Calc) ActionTurnOn(param interface{}) {
+func (calc *Calc) ActionTurnOn(param interface{}) error {
 	fmt.Println("Calculator ON")
+	return nil
 }
 
-func (calc *Calc) ActionTurnOff(param interface{}) {
+func (calc *Calc) ActionTurnOff(param interface{}) error {
 	fmt.Println("Calculator OFF")
+	return nil
 }
 
-func (calc *Calc) ActionSetOperand1(param interface{}) {
+func (calc *Calc) ActionSetOperand1(param interface{}) error {
 	calc.operand1 = intFromDigit(param)
+	return nil
 }
 
-func (calc *Calc) ActionAppendOperand1(param interface{}) {
+func (calc *Calc) ActionAppendOperand1(param interface{}) error {
 	calc.operand1 = calc.operand1*10 + intFromDigit(param)
+	return nil
 }
 
-func (calc *Calc) ActionSetOperator(param interface{}) {
+func (calc *Calc) ActionSetOperator(param interface{}) error {
 	calc.operator = param.(byte)
+	return nil
 }
 
-func (calc *Calc) ActionAppendOperand2(param interface{}) {
+func (calc *Calc) ActionAppendOperand2(param interface{}) error {
 	calc.operand2 = calc.operand2*10 + intFromDigit(param)
+	return nil
 }
 
-func (calc *Calc) ActionCompute(param interface{}) {
+func (calc *Calc) ActionCompute(param interface{}) error {
 	switch calc.operator {
 	case '+':
 		calc.operand1 += calc.operand2
@@ -151,6 +158,7 @@ func (calc *Calc) ActionCompute(param interface{}) {
 	}
 	calc.operand2 = 0
 	calc.operator = ' '
+	return nil
 }
 
 func SetTty() {
