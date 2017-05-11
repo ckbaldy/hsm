@@ -44,10 +44,10 @@ type Calc struct {
 	operator           byte
 }
 
-func (calc *Calc) Init(name string) {
+func (calc *Calc) Init() {
 	calc.log = logrus.StandardLogger()
 	// calc.log.Level = logrus.DebugLevel
-	calc.HSMBase.Init(name, calc)
+	calc.HSMBase.Init(calc)
 
 	// OFF
 	off := calc.NewState(CalcStateOff)
@@ -60,7 +60,6 @@ func (calc *Calc) Init(name string) {
 	on.AddTransitions([]hsm.Transition{
 		{CalcEventOffButton, CalcStateOff, calc.ActionTurnOff},
 		{CalcEventClear, CalcStateOn, nil}, // Clear with entry action to "on" state
-		{CalcEventDigit, CalcStateOperand1, calc.ActionAppendOperand1},
 	})
 	// Operand1
 	operand1 := calc.NewState(CalcStateOperand1)
@@ -89,11 +88,15 @@ func (calc *Calc) Init(name string) {
 	on.AddEntryActions(calc.ActionClear)
 }
 
+func (calc *Calc) Name() string {
+	return "CALC"
+}
+
 func (calc *Calc) Log() *logrus.Logger {
 	return calc.log
 }
 
-func (calc *Calc) LogTransition(tran *hsm.Transition, param interface{}) {
+func (calc *Calc) LogTransition(from hsm.State, tran *hsm.Transition, param interface{}) {
 	if tran.NewState == CalcStateOff {
 		return
 	}
@@ -192,7 +195,7 @@ func main() {
 
 	// Initialize calculator and input reader
 	var myCalc Calc
-	myCalc.Init("CALC")
+	myCalc.Init()
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Welcome to the HSM Calculator!")
 	fmt.Println("Perform integer arithmetic with +, -, *, /, =, o=on, f=off, c=clear, q=quit")

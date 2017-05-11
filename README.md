@@ -14,15 +14,17 @@ import "github.com/watercraft/hsm"
 type Calc struct {
         hsm.HSMBase
         ...
-func (calc *Calc) Init(name string) {
-        calc.HSMBase.Init(name, calc)
+func (calc *Calc) Init() {
+        calc.HSMBase.Init(calc)
+        ...
+func (calc *Calc) Name() string {
         ...
 func (calc *Calc) Log() *logrus.Logger {
         ...
-func (calc *Calc) LogTransition(tran *hsm.Transition, param interface{}) {
+func (calc *Calc) LogTransition(from hsm.State, tran *hsm.Transition, param interface{}) {
         ...
 ```
-The *Init()* function constructs the state machine adding states, transitions, and actions see [calc.go](calc/calc.go).  *Log()* returns the logrus.Logger for HSM to use and *LogTransition()* is called for each state transition. Actions are also member functions of the HSM instance. For example, this action adds a decimal digit to the member *operand1*:
+The *Init()* function constructs the state machine adding states, transitions, and actions see [calc.go](calc/calc.go).  *Name()* returns a name for the HSM instance, *Log()* returns the logrus.Logger for HSM to use and *LogTransition()* is called after each state transition. Actions are also member functions of the HSM instance. For example, this action adds a decimal digit to the member *operand1*:
 ```
 func (calc *Calc) ActionAppendOperand1(param interface{}) error {
         calc.operand1 = calc.operand1*10 + intFromDigit(param)
@@ -33,7 +35,6 @@ Exit and entry actions can also be specified. All exit actions from the current 
 ```
 	on.AddEntryActions(calc.ActionClear)
 ```
-Our calculator differs from the picture in that the unqualified superstate *On* is a valid state for the machine with transitions to substates as well as external states.  One way to understand this is to view the superstate as the initial substate of the nested state machine and, indeed, our calculator's *On* and *Operand1* states could be merged to match the picture.
 Once your machine is defined, you can then initialize your HSM and inject events.
 ```
         var myCalc Calc

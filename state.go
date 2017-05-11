@@ -12,6 +12,7 @@ type Transition struct {
 
 type StateInstance struct {
 	Name         State
+	initialState State
 	hsm          *HSMBase
 	parent       *StateInstance
 	transitions  map[Event]*Transition
@@ -40,6 +41,9 @@ func (state *StateInstance) AddTransitions(trans []Transition) {
 
 func (state *StateInstance) AddChildren(children ...*StateInstance) {
 	for _, child := range children {
+		if state.initialState == "" {
+			state.initialState = child.Name
+		}
 		child.parent = state
 	}
 }

@@ -18,43 +18,48 @@ type Event string
 
 // Interface for calling into HSM instance
 type HSMInstance interface {
+	// Get name of instance
+	Name() string
 	// Get loggger from instance
 	Log() *logrus.Logger
-	// Call instance to log transition before it is applied
-	LogTransition(tran *Transition, param interface{})
+	// Call instance to log transition after it is applied
+	// The initial state of a superstate can be found in the CurrentState of HSMBase
+	LogTransition(from State, tran *Transition, param interface{})
 }
 
 // Base object for HSM
 type HSMBase struct {
-	Name         string
 	CurrentState State
 	instance     HSMInstance
 	states       map[State]*StateInstance
 }
 
 // Initialize HSM base object
-func (hsm *HSMBase) Init(name string, instance HSMInstance) {
+func (hsm *HSMBase) Init(instance HSMInstance) {
 	hsm.instance = instance
-	hsm.Name = name
 	hsm.states = make(map[State]*StateInstance)
-	hsm.instance.Log().WithFields(logrus.Fields{
-		"hsm": hsm.Name,
-	}).Debug("Init")
+	hsm.instance.Log().Debug("Init")
+}
+
+func (hsm *HSMBase) lookupState(name State) (*StateInstance, error) {
+	state, ok := hsm.states[name]
+	if !ok {
+		hsm.instance.Log().WithFields(logrus.Fields{
+			"hsm":   hsm.instance.Name(),
+			"state": name,
+		}).Debug("State not found")
+		return nil, errors.New(http.StatusInternalServerError,
+			fmt.Sprintf("State %s not found for %s", name, hsm.instance.Name()))
+	}
+	return state, nil
 }
 
 // Inject event into HSM, return error is transition is not found
 func (hsm *HSMBase) Inject(event Event, param interface{}) error {
 	// Find current state
-	state, ok := hsm.states[hsm.CurrentState]
-	if !ok {
-		hsm.instance.Log().WithFields(logrus.Fields{
-			"hsm":   hsm.Name,
-			"state": hsm.CurrentState,
-			"event": event,
-			"param": param,
-		}).Debug("Current state not found")
-		return errors.New(http.StatusInternalServerError,
-			fmt.Sprintf("Current state not found for %s from %s on %s with %+v", hsm.Name, hsm.CurrentState, event, param))
+	state, err := hsm.lookupState(hsm.CurrentState)
+	if err != nil {
+		return err
 	}
 	// Build list of actions to run if a valid transition is found
 	actions := state.exitActions
@@ -76,31 +81,31 @@ func (hsm *HSMBase) Inject(event Event, param interface{}) error {
 	}
 	// Match not found
 	hsm.instance.Log().WithFields(logrus.Fields{
-		"hsm":   hsm.Name,
+		"hsm":   hsm.instance.Name(),
 		"state": hsm.CurrentState,
 		"event": event,
 		"param": param,
 	}).Debug("Illegal transition")
 	return errors.New(http.StatusConflict,
-		fmt.Sprintf("Illegal transition for %s from %s on %s with %+v", hsm.Name, hsm.CurrentState, event, param))
+		fmt.Sprintf("Illegal transition for %s from %s on %s with %+v", hsm.instance.Name(), hsm.CurrentState, event, param))
 }
 
 // Apply transition to state machine
 func (hsm *HSMBase) applyTransition(tran *Transition, actions []ActionFunc, param interface{}) error {
-	// Add entry actions
-	newState, ok := hsm.states[tran.NewState]
-	if !ok {
-		hsm.instance.Log().WithFields(logrus.Fields{
-			"hsm":   hsm.Name,
-			"state": hsm.CurrentState,
-			"on":    tran.On,
-			"new":   tran.NewState,
-			"param": param,
-		}).Debug("New state not found")
-		return errors.New(http.StatusInternalServerError,
-			fmt.Sprintf("New state not found for %s from %s on %s with %+v", hsm.Name, hsm.CurrentState, tran.On, param))
+	// Add entry actions for the new state
+	newState, err := hsm.lookupState(tran.NewState)
+	if err != nil {
+		return err
 	}
 	actions = append(actions, newState.entryActions...)
+	// Add entry actions for intial state of superstate
+	if newState.initialState != "" {
+		newState, err = hsm.lookupState(newState.initialState)
+		if err != nil {
+			return err
+		}
+		actions = append(actions, newState.entryActions...)
+	}
 	// Add action for transition
 	if tran.Action != nil {
 		actions = append(actions, tran.Action)
@@ -109,7 +114,7 @@ func (hsm *HSMBase) applyTransition(tran *Transition, actions []ActionFunc, para
 	for _, action := range actions {
 		err := action(param)
 		hsm.instance.Log().WithFields(logrus.Fields{
-			"hsm":   hsm.Name,
+			"hsm":   hsm.instance.Name(),
 			"state": hsm.CurrentState,
 			"on":    tran.On,
 			"new":   tran.NewState,
@@ -121,16 +126,17 @@ func (hsm *HSMBase) applyTransition(tran *Transition, actions []ActionFunc, para
 			return err
 		}
 	}
-	// Log transition
-	hsm.instance.LogTransition(tran, param)
 	// Set New state
+	from := hsm.CurrentState
 	hsm.instance.Log().WithFields(logrus.Fields{
-		"hsm":   hsm.Name,
+		"hsm":   hsm.instance.Name(),
 		"state": hsm.CurrentState,
 		"on":    tran.On,
-		"new":   tran.NewState,
+		"new":   newState.Name,
 		"param": param,
 	}).Debug("Set state")
-	hsm.CurrentState = tran.NewState
+	hsm.CurrentState = newState.Name
+	// Log transition
+	hsm.instance.LogTransition(from, tran, param)
 	return nil
 }
