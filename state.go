@@ -33,7 +33,7 @@ type StateInstance struct {
 // NewState creates a new state with the hierarchial state machine.
 func (hsm *Base) NewState(name State) *StateInstance {
 	var state *StateInstance
-	if hsm.runState == initializing {
+	if hsm.runState == INITIALIZING {
 		state = &StateInstance{}
 		state.Name = name
 		state.transitions = make(map[Event]*Transition)

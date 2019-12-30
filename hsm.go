@@ -1,12 +1,23 @@
-// Copyright 2017 F. Alan Jones.  All rights reserved.
-
 package hsm
+
+// TODO:  Change On() so it runs Finalize() if its not already been done.
+// Add tests cases for the run-level states.  Verify finalize, on and
+// adding states after on ... etc ...
+
+// TODO:  finalize test cases.
+
+// TODO:  add new diagram w/ transitions to states that are not default states.
+// and test cases for these new states.
+//
+
+// TODO:  complete README.
 
 import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
 	"runtime"
+	"sync"
 
 	"github.com/sirupsen/logrus"
 )
@@ -18,12 +29,13 @@ type Event string
 // hsm run-level, configuration state.
 type hsmConfigState int
 
+// hsmConfigState enumeration
 const (
-	initializing hsmConfigState = iota
-	finalized
-	on
-	exiting
-	off
+	INITIALIZING hsmConfigState = iota
+	FINALIZED
+	ON
+	EXITING
+	OFF
 )
 
 const (
@@ -44,19 +56,8 @@ type Base struct {
 	runState     hsmConfigState
 	logger       *logrus.Logger
 	log          *logrus.Entry
+	sync.Mutex
 }
-
-var topState *StateInstance
-
-// TODO:  add Off method which runs all exit actions and puts the
-// state machine back in the state so it cannot process events.
-// On needs be run to turn it back on.
-
-// TODO:  add internal machine states.
-// 1. can only configure in confure state.
-// 2. after finalize is run, cannot change state machine config
-// 3. On.  Can process events.
-// 4. Off.  cannot process events
 
 // Configure initializes the state machine, creating a state machine map
 // This must be called once prior to intializing or defining the states,
@@ -67,7 +68,7 @@ func (hsm *Base) Configure(name string) {
 		hsm.states = make(map[State]*StateInstance)
 		hsm.DisableLogger()
 	}
-	hsm.runState = initializing
+	hsm.runState = INITIALIZING
 }
 
 // AddLogger adds an externally defined logrus logger,  enabling logging of
@@ -98,22 +99,25 @@ func (hsm *Base) Finalize() error {
 		if state.parent == nil {
 			topStates = append(topStates, state)
 		} else {
-			// Parent defined in state
 			numStatesWithParent++
 		}
 	}
+
+	// There should be only be one, least common ancestor after all state
+	// parent/child relationships definitions have been finalized  and all
+	// other states must have defined parent.
 	if len(topStates) == 1 && numStatesWithParent == (len(hsm.states)-1) {
 
-		topState = hsm.NewState(hsmTopState)
-		topState.AddTransitions([]Transition{
-			{On: hsmInitEvent, NewState: topState.Name}})
+		hsm.topState = hsm.NewState(hsmTopState)
+		hsm.topState.AddTransitions([]Transition{
+			{On: hsmInitEvent, NewState: hsm.topState.Name}})
 		topStates[0].AddTransitions([]Transition{
-			{On: hsmExitEvent, NewState: topState.Name}})
+			{On: hsmExitEvent, NewState: hsm.topState.Name}})
 		// The initial child state is the user configured, top state.
-		topState.AddChildren(topStates[0])
+		hsm.topState.AddChildren(topStates[0])
 
-		hsm.CurrentState = topState.Name
-		hsm.runState = finalized
+		hsm.CurrentState = hsm.topState.Name
+		hsm.runState = FINALIZED
 
 	} else if numStatesWithParent == 0 {
 		err = fmt.Errorf("no child states were added in %s", hsm.Name)
@@ -139,13 +143,13 @@ func (hsm *Base) Finalize() error {
 // for the top state.
 func (hsm *Base) On() error {
 	var err error
-	if hsm.runState == finalized || hsm.runState == off {
+	if hsm.runState == FINALIZED || hsm.runState == OFF {
 		currentState, err := hsm.lookupState(hsm.CurrentState)
 		if err != nil {
 			return err
 		}
-		if currentState == topState {
-			hsm.runState = on
+		if currentState == hsm.topState {
+			hsm.runState = ON
 			hsm.Inject(hsmInitEvent, nil)
 		}
 	} else {
@@ -159,15 +163,15 @@ func (hsm *Base) On() error {
 // actions and setting the hsm run state to off.
 func (hsm *Base) Off() error {
 	var err error
-	if hsm.runState == on {
+	if hsm.runState == ON {
 		currentState, err := hsm.lookupState(hsm.CurrentState)
 		if err != nil {
 			return err
 		}
-		if currentState != topState {
-			hsm.runState = exiting
+		if currentState != hsm.topState {
+			hsm.runState = EXITING
 			hsm.Inject(hsmExitEvent, nil)
-			hsm.runState = off
+			hsm.runState = OFF
 		}
 	} else {
 		err = fmt.Errorf("cannot start hsm %s; it is not finalized", hsm.Name)
@@ -194,7 +198,13 @@ func (hsm *Base) lookupState(name State) (*StateInstance, error) {
 // Inject event into HSM. Return an error if the event/transition is not found.
 func (hsm *Base) Inject(event Event, param interface{}) error {
 
-	if hsm.runState != on && hsm.runState != exiting {
+	// Ensure run to completion (RTC) in a concurrent environment; the last
+	// event/transtion sequence must run to completion before starting the
+	// next transition.
+	hsm.Lock()
+	defer hsm.Unlock()
+
+	if hsm.runState != ON && hsm.runState != EXITING {
 		err := fmt.Errorf("cannot inject events into hsm %s; it is not on",
 			hsm.Name)
 		hsm.log.Error(err)
@@ -339,7 +349,7 @@ func (hsm *Base) applyTransition(tran *Transition, exitActions []ActionFunc,
 	entryActions := []ActionFunc{}
 
 	// Get entry and/or exit actions required for the transition.
-	if sourceState.parent != nil && hsm.runState != off {
+	if sourceState.parent != nil && hsm.runState != OFF {
 		// Not in top state so use LCA to collect exit/entry actions
 		exitActionsFromSourceState, lcaEntryActions, err :=
 			hsm.leastCommonAncestor(sourceState, targetState)
@@ -359,7 +369,7 @@ func (hsm *Base) applyTransition(tran *Transition, exitActions []ActionFunc,
 	}
 
 	// Add entry actions associated with default transitons
-	if hsm.runState != exiting {
+	if hsm.runState != EXITING {
 		for defaultStateName != "" {
 			defaultState, err := hsm.lookupState(defaultStateName)
 			if err != nil {
